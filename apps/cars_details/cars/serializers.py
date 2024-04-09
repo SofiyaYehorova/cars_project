@@ -1,29 +1,95 @@
 from datetime import date, datetime, timedelta
 
+from django.contrib.auth import get_user_model
+
+from apps.all_users.users.models import UserModel as User
+
+UserModel: User = get_user_model()
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.db.models import Avg, Count, manager
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
 
 import requests
 
-from .models import CarModel
+from core.enums.regex_enums import RegexEnum
+from core.services.email_service import EmailService
+
+from .models import CarModelV2, CarPhotosModel
+
+# class ProductPhotoSerializer(ModelSerializer):
+#     class Meta:
+#         model = ProductPhotosModel
+#         fields = ('id', 'photo')
+
+# def to_representation(self, instance: ProductPhotosModel):
+#     return {
+#         "id": instance.id,
+#         "photo": instance.photo.url
+#     }
+
+
+# class ProductSerializer(ModelSerializer):
+#     photos = ProductPhotoSerializer(many=True, read_only=True)
+#
+#     class Meta:
+#         model = ProductModel
+#         fields = (
+#             'id', 'created_at', 'category', 'producer', 'material', 'length', 'clasp', 'price', 'discounts', 'amount', 'solded',
+#             'photos')
+class CarPhotosListSerializer(serializers.Serializer):
+    image = serializers.ListField(child=serializers.ImageField())
+
+    class Meta:
+        model = CarPhotosModel
+        fields = ('id', 'image',)
+
+    def to_representation(self, instance: CarPhotosModel):
+        return {
+            "id": instance.id,
+            "image": instance.image.url
+        }
+
+    # def create(self, validated_data):
+    #     print("self.context", self.context)
+    #     car = self.context['car']
+    #     print('car', car)
+    #
+    #     # user = validated_data['seller']
+    #     # photos = validated_data.pop('photos')
+    #     # car = CarModel.objects.create(**validated_data)
+    #     for image in validated_data['images']:
+    #         CarPhotosModel.objects.create(car=car, image=image)
+    #     # # EmailService.created_car_by_seller(user, car)
+    #     return car
 
 
 def average_price_in_region(price, region):
-    average_price_by_regions = CarModel.objects.filter(region=region).aggregate(avg_price=Avg('price'))
+    average_price_by_regions = CarModelV2.objects.filter(region=region).aggregate(avg_price=Avg('price'))
     return average_price_by_regions['avg_price']
 
 
 def average_price(price):
-    average_price = CarModel.objects.aggregate(Avg('price'))
+    average_price = CarModelV2.objects.aggregate(Avg('price'))
     return average_price['price__avg']
+
+
+# def average_price_for_same_car_by_parameters(price, brand, cars_model):
+#     # global average_price_for_same_car_by_parameters
+#     filtered_cars = CarModel.objects.filter(brand=brand, cars_model=cars_model)
+#     if filtered_cars.exists():
+#         total_price = sum(car.price for car in filtered_cars)
+#         average_price_for_same_car_by_parameters = total_price / len(filtered_cars)
+#     return average_price_for_same_car_by_parameters['average_price_for_same_car_by_parameters']
 
 
 def get_currency_exchange_rates():
@@ -44,26 +110,61 @@ def calculate_price_in_currency(price, currencies):
     return recalculated_prices
 
 
+#################################################################################################
+def validate_description(description):
+    obscene_words = [
+        "FUCK",
+        "asshole",
+        "fucking",
+        "fuck"
+    ]
+    for word in obscene_words:
+        if word in description.lower():
+            raise ValidationError({'error': 'Obscene word found in description'})
+    return description
+
+
 class CarSerializer(serializers.ModelSerializer):
+    image = CarPhotosListSerializer(read_only=True, many=True)
 
     class Meta:
-        model = CarModel
+        model = CarModelV2
         fields = (
-            'id', 'brand', 'cars_model', 'price', 'seller', 'currency', 'premium_seller',
+            'id', 'brand', 'cars_model', 'price', 'seller', 'currency', 'premium_seller', 'description',
+            'blocked', 'attempts',
+            'image',
+            # 'uploaded_photos',
             # 'color', 'year', 'seat_count', 'body_type',
             # 'engine_type',
             # 'engine_volume',
             # 'transmission', 'mileage',
             'region',
         )
-        read_only_fields = ('seller', 'premium_seller',
+        read_only_fields = ('seller', 'premium_seller', 'attempts', 'blocked', 'image'
+                            # 'photos',
+                            # 'uploaded_photos'
                             )
 
-    # def save(self, instance, validated_data):
-    #     if self.attempts >= 3:
-    #         self.attempts = 0
-    #         messages.warning('Ad creation car blocked. Contact manager to unblocked')
-    #         return super().save(instance)
+    def validate(self, data):
+        description = data.get('description')
+        attempts = data.get('attempts', 0)
+        blocked = data.get('blocked')
+        if validate_description(description):
+            attempts += 1
+            if attempts == 3:
+                blocked = True
+                return ValidationError({'error': 'You car is blocked'})
+        return data
+
+    # def create(self, validated_data):
+    #     # user = validated_data['seller_id']
+    #     # print(validated_data)
+    #     # photos = validated_data.pop('photos')
+    #     car = CarModel.objects.create(**validated_data)
+    #     # for photo in photos:
+    #     #     CarPhotosModel.objects.create(car=car, photo=photo)
+    #     # EmailService.created_car_by_seller(user, car)
+    #     return car
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -74,67 +175,24 @@ class CarSerializer(serializers.ModelSerializer):
         return data
 
 
-
+##########################################################################
 class PremiumSellersCarsSerializer(CarSerializer):
-
     class Meta:
-        model = CarModel
+        model = CarModelV2
         fields = (
             'id', 'brand', 'cars_model', 'price', 'seller', 'currency', 'premium_seller', 'region',
-            # 'attempts',
+            'description',
+            'blocked', 'attempts',
+
         )
-        read_only_fields = ('seller', 'premium_seller', 'attempts'
-                            # 'car_views',
+        read_only_fields = ('seller', 'premium_seller', 'attempts', 'blocked', 'photos'
                             )
 
-
-    # def save(self, *args, **kwargs):
-    #     if self.attempts >= 3:
-    #         self.attempts = 0
-    #         messages.warning('Ad creation car blocked. Contact manager to unblocked')
-    #         return super().save(*args, **kwargs)
-        
     def to_representation(self, instance):
         data = super().to_representation(instance)
         price = data['price']
         data['average_price_in_region'] = average_price_in_region(price, data['region'])
+        # data['average_price_for_same_car_by_parameters'] = average_price_for_same_car_by_parameters(price, data[
+        #     'brand', 'cars_model'])
         data['average_price'] = average_price(data['price'])
         return data
-
-    #
-
-    # НЕ ПРАЦЮЄ
-    #         def validate_brand(self, brand):
-    #             if not brand:
-    #                 send_mail(
-    #                     'Brand not available',
-    #                     'The serializer did not receive any data',
-    #                     'from@example.com',  # виправити на email продавця
-    #                     ['manager@example.com'],
-    #                     fail_silently=False,
-    #                 )
-    #             return brand
-    # def validate(self, brand):
-    #     if not brand:
-    #         raise serializers.ValidationError('Brand is missing contact with manager manager@gmail.com')
-    #     return brand
-
-    # def create(self, validated_data):
-    #     seller_id = validated_data['seller_id']
-    #     existing_quantity = CarModel.objects.filter(seller_id=seller_id).aggregate(models.Sum('quantity'))[
-    #         'quantity__sum']
-    #     if existing_quantity is not None and existing_quantity + validated_data['quantity'] >= 1:
-    #         raise serializers.ValidationError('Total quantity cannot be greater than 1')
-    #     return super().create(validated_data)
-
-    #
-    # def update(self, instance, validated_data):
-    #     seller_id = instance.seller.id
-    #     new_quantity = validated_data.get('quantity', instance.quantity)
-    #     existing_quantity = CarModel.objects.filter(seller_id=seller_id).exclude(id=instance.id).aggregate(models.Sum('quantity'))[
-    #         'quantity_sum']
-    #     if existing_quantity is not None and existing_quantity + new_quantity > 1:
-    #         raise serializers.ValidationError('Total quantity cannot be greater than 1')
-    #     return super().update(instance, validated_data)
-
-    #

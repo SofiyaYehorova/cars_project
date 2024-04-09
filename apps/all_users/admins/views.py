@@ -17,7 +17,7 @@ class UserToManagerView(GenericAPIView):
     queryset = UserModel.objects.all()
 
     def patch(self, *args, **kwargs):
-        user = self.get_object()
+        user: User = self.get_object()
         if not user.is_staff:
             user.is_staff = True
             user.roles = 'manager'
@@ -31,7 +31,7 @@ class ManagerToUserView(GenericAPIView):
     queryset = UserModel.objects.all()
 
     def patch(self, *args, **kwargs):
-        user = self.get_object()
+        user:User = self.get_object()
         if user.is_staff:
             user.is_staff = False
             user.roles = 'visitor'
@@ -46,7 +46,7 @@ class BanManagerView(GenericAPIView):
     queryset = UserModel.objects.all()
 
     def patch(self, *args, **kwargs):
-        user = self.get_object()
+        user:User = self.get_object()
         if user.is_active:
             user.is_active = False
             user.roles = 'blocked'
@@ -61,7 +61,7 @@ class UnBanManagerView(GenericAPIView):
     queryset = UserModel.objects.all()
 
     def patch(self, *args, **kwargs):
-        user = self.get_object()
+        user:User = self.get_object()
         if not user.is_active:
             user.is_active = True
             user.roles = 'manager'

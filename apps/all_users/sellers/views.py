@@ -19,7 +19,7 @@ from apps.all_users.sellers.models import SellerModel
 from apps.all_users.sellers.serializers import SellerSerializer
 from apps.all_users.users.models import UserModel as User
 from apps.all_users.users.serializers import UserSerializer
-from apps.cars_details.cars.models import CarModel
+from apps.cars_details.cars.models import CarModelV2
 from apps.cars_details.cars.serializers import CarSerializer
 
 UserModel: User = get_user_model().objects.all()
@@ -44,7 +44,7 @@ class SellerCarsListCreateView(ListAPIView):
         exist = UserModel.filter(pk=pk).exists()
         if not exist:
             raise Http404()
-        cars = CarModel.objects.filter(seller_id=pk)
+        cars = CarModelV2.objects.filter(seller_id=pk)
         serializer = CarSerializer(cars, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
@@ -57,7 +57,7 @@ class SellerCarsListCreateView(ListAPIView):
         pk = kwargs['pk']
         seller_id = UserModel.filter(roles='seller').first().id
         if seller_id:
-            has_car = CarModel.objects.filter(seller_id=pk).exists()
+            has_car = CarModelV2.objects.filter(seller_id=pk).exists()
             if not has_car:
                 pk = kwargs['pk']
                 data = self.request.data
@@ -67,6 +67,7 @@ class SellerCarsListCreateView(ListAPIView):
                 if not exists:
                     raise Http404()
                 serializer.save(seller_id=pk)
+                # serializer.create_car(seller_id=pk)
                 return Response(serializer.data, status.HTTP_201_CREATED)
         return Response(
             'You cannot post more than one car, get more optionals https://example.com/info',status=status.HTTP_403_FORBIDDEN)

@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class SaleAnnouncementConfig(AppConfig):
+class AccountsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.sale_announcement'
+    name = 'apps.all_users.accounts'

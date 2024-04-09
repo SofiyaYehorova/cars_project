@@ -1,4 +1,5 @@
 from enum import Enum
+from functools import wraps
 
 
 class RegexEnum(Enum):
@@ -6,7 +7,7 @@ class RegexEnum(Enum):
         r'^[A-Z][a-zA-Z\d]{1,24}$',
         [
             'First letter uppercase min 2 max 25 characters',
-            # 'If your brand_models is missing, contact the administrator'
+            'If your brand_models is missing, contact the administrator'
         ]
     )
     MODEL = (
@@ -32,7 +33,26 @@ class RegexEnum(Enum):
             'min 2 max 50 ch'
         ]
     )
+    DESCRIPTION = (
+        r'^((?!\bfuck(ing)?|shit(ting)?|asshole?|bitch(es)?|damn?|hell?\b).)*$',
+        [
+            'Obscene language is defined in description, Please revise it'
+        ]
+    )
 
     def __init__(self, pattern: str, msg: str | list[str]):
         self.pattern = pattern
         self.msg = msg
+
+
+def count_description_calls(func):
+    attempts = 0
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        return func(*args, **kwargs)
+
+    wrapper.description_calls = attempts
+    return wrapper

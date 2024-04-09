@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.cars_details.cars.serializers import CarSerializer
 
-from ...cars_details.cars.models import CarModel
+from ...cars_details.cars.models import CarModelV2
 from .models import PremiumSellerModel
 
 # AdvertisementModel,

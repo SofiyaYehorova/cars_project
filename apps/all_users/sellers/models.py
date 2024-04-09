@@ -5,10 +5,10 @@ from django.db import models
 
 from core.models import BaseModel
 
-from apps.all_users.users.models import UserModel as User
-from apps.cars_details.cars.models import CarModel
+# from apps.all_users.users.models import UserModel as User
+from apps.cars_details.cars.models import CarModelV2
 
-UserModel: User = get_user_model()
+# UserModel: User = get_user_model()
 
 
 class SellerModel(BaseModel):
@@ -24,8 +24,8 @@ class SellerModel(BaseModel):
     #     phone_number = models.IntegerField(unique=True, null=True, blank=True)
     #     company_name = models.CharField(max_length=25, null=True, blank=True)
     #     position = models.CharField(max_length=20, null=True, blank=True)
-    cars = models.ForeignKey(CarModel, on_delete=models.CASCADE, related_name='cars')
-    seller = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name='auth_user')
+    cars = models.ForeignKey(CarModelV2, on_delete=models.CASCADE, related_name='cars')
+    # seller = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name='auth_user')
 
 
 #     user = models.OneToOneField(UserModel, on_delete=models.CASCADE, related_name='sellers')
